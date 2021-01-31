@@ -291,51 +291,81 @@ async def lastFM(p: 'Player', conn: Connection) -> Optional[bytes]:
 @domain.route('/web/osu-search.php')
 @required_args({'u', 'h', 'r', 'q', 'm', 'p'})
 @get_login('u', 'h')
+#gatari search ^_^
 async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
     if not conn.args['p'].isdecimal():
         return (400, b'')
-
-    url = f'{glob.config.mirror}/api/search'
+    
+    url = "https://osu.gatari.pw/web/osu-search.php"
+    #url = f'{glob.config.mirror}/api/search' ww
     params = {
-        'amount': 100,
-        'offset': conn.args['p'],
-        'query': conn.args['q']
+        "u": "ChiiKun_",
+        "h": "68a43f66d7392f72dc074d797ea428ff",
+        'p': conn.args['p'],
+        'q': conn.args['q']
     }
 
     if conn.args['m'] != '-1':
-        params |= {'mode': conn.args['m']}
+        params |= {'m': conn.args['m']}
 
     if conn.args['r'] != '4': # 4 = all
         # convert to osu!api status
-        status = RankedStatus.from_osudirect(int(conn.args['r']))
-        params |= {'status': status.osu_api}
+        #status = RankedStatus.from_osudirect(int(conn.args['r']))
+        params |= {'r': conn.args['r']}
 
     async with glob.http.get(url, params = params) as resp:
         if not resp or resp.status != 200:
             return b'Failed to retrieve data from mirror!'
 
-        result = await resp.json()
+        result = await resp.read()
 
-    lresult = len(result) # send over 100 if we receive
-                          # 100 matches, so the client
-                          # knows there are more to get
-    ret = [f"{'101' if lresult == 100 else lresult}"]
-    diff_rating = lambda map: map['DifficultyRating']
+    return result
+# old search with ripple
+# async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
+    # if not conn.args['p'].isdecimal():
+        # return (400, b'')
 
-    for bmap in result:
-        diffs = ','.join([
-            '[{DifficultyRating:.2f}⭐] {DiffName} '
-            '{{CS{CS} OD{OD} AR{AR} HP{HP}}}@{Mode}'.format(**row)
-            for row in sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
-        ])
+    # url = f'https://storage.ripple.moe/api/search'
+    # params = {
+        # 'amount': 100,
+        # 'offset': conn.args['p'],
+        # 'query': conn.args['q']
+    # }
 
-        ret.append(
-            '{SetID}.osz|{Artist}|{Title}|{Creator}|'
-            '{RankedStatus}|10.0|{LastUpdate}|{SetID}|' # TODO: rating
-            '0|0|0|0|0|{diffs}'.format(**bmap, diffs=diffs)
-        ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
+    # if conn.args['m'] != '-1':
+        # params |= {'mode': conn.args['m']}
 
-    return '\n'.join(ret).encode()
+    # if conn.args['r'] != '4': # 4 = all
+        # # convert to osu!api status
+        # status = RankedStatus.from_osudirect(int(conn.args['r']))
+        # params |= {'status': status.osu_api}
+
+    # async with glob.http.get(url, params = params) as resp:
+        # if not resp or resp.status != 200:
+            # return b'Failed to retrieve data from mirror!'
+
+        # result = await resp.json()
+
+    # lresult = len(result) # send over 100 if we receive
+                          # # 100 matches, so the client
+                          # # knows there are more to get
+    # ret = [f"{'101' if lresult == 100 else lresult}"]
+    # diff_rating = lambda map: map['DifficultyRating']
+
+    # for bmap in result:
+        # diffs = ','.join([
+            # '[{DifficultyRating:.2f}⭐] {DiffName} '
+            # '{{CS{CS} OD{OD} AR{AR} HP{HP}}}@{Mode}'.format(**row)
+            # for row in sorted(bmap['ChildrenBeatmaps'], key = diff_rating)
+        # ])
+
+        # ret.append(
+            # '{SetID}.osz|{Artist}|{Title}|{Creator}|'
+            # '{RankedStatus}|10.0|{LastUpdate}|{SetID}|' # TODO: rating
+            # '0|0|0|0|0|{diffs}'.format(**bmap, diffs=diffs)
+        # ) # 0s are threadid, has_vid, has_story, filesize, filesize_novid
+
+    # return '\n'.join(ret).encode()
 
 #    # XXX: some work on gulag's possible future mirror
 #    query = conn.args['q'].replace('+', ' ') # TODO: allow empty

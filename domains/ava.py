@@ -8,10 +8,10 @@ from cmyui import Domain
 
 """ ava: avatar server (for both ingame & external) """
 
-domain = Domain('a.ppy.sh')
+domain = Domain('a.sutekina.tk')
 
 AVATARS_PATH = Path.cwd() / '.data/avatars'
-DEFAULT_AVATAR = AVATARS_PATH / 'default.jpg'
+DEFAULT_AVATAR = AVATARS_PATH / 'default.png'
 @domain.route(re.compile(r'^/\d{1,10}(?:\.jpg)?$'))
 async def get_avatar(conn: Connection) -> None:
     path = AVATARS_PATH / f'{conn.path[1:]}.jpg'
