@@ -23,7 +23,7 @@ from objects import glob
 from objects.beatmap import Beatmap
 from objects.beatmap import RankedStatus
 from objects.clan import Clan
-from objects.clan import ClanRank
+from objects.clan import ClanPrivileges
 from objects.match import MapPool
 from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
@@ -131,7 +131,7 @@ async def roll(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     points = random.randrange(0, max_roll)
     return f'{p.name} rolls {points} points!'
 
-# TODO: prolly beatconnect
+# TODO: prolly beatconnect/chimu.moe
 @command(Privileges.Normal, aliases=['bc'])
 async def bloodcat(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     """Return a bloodcat link of the user's current map (situation dependant)."""
@@ -1378,7 +1378,7 @@ async def clan_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
 
     # set owner's clan & clan rank (cache & sql)
     p.clan = clan
-    p.clan_rank = ClanRank.Owner
+    p.clan_rank = ClanPrivileges.Owner
 
     clan.owner = p.id
     clan.members.add(p.id)
@@ -1386,7 +1386,7 @@ async def clan_create(p: 'Player', c: Messageable, msg: Sequence[str]) -> str:
     await glob.db.execute(
         'UPDATE users '
         'SET clan_id = %s, '
-        'clan_rank = 3 ' # ClanRank.Owner
+        'clan_rank = 3 ' # ClanPrivileges.Owner
         'WHERE id = %s',
         [id, p.id]
     )
