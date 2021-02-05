@@ -353,6 +353,14 @@ class Player:
             [int(self.priv), self.id]
         )
 
+    async def create_stats(self) -> None:
+        """ create stats poog champ"""
+        await glob.db.execute(
+            'INSERT INTO stats '
+            '(id) VALUES (%s)',
+            [self.id]
+        )
+
     async def remove_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, removing `bits`."""
         self.priv &= ~bits
@@ -364,9 +372,18 @@ class Player:
             [int(self.priv), self.id]
         )
 
+    async def remove_stats(self) -> None: 
+        """delete `stats` for the person ^_^"""
+        await glob.db.execute(
+            'DELETE FROM stats '
+            'WHERE (id = %s)',
+            [self.id]
+        )
+        
     async def ban(self, admin: 'Player', reason: str) -> None:
         """Ban `self` for `reason`, and log to sql."""
         await self.remove_privs(Privileges.Normal)
+        await self.remove_stats()
 
         log_msg = f'{admin} banned for "{reason}".'
         await glob.db.execute(
@@ -392,7 +409,8 @@ class Player:
     async def unban(self, admin: 'Player', reason: str) -> None:
         """Unban `self` for `reason`, and log to sql."""
         await self.add_privs(Privileges.Normal)
-
+        await self.create_stats()
+        
         log_msg = f'{admin} unbanned for "{reason}".'
         await glob.db.execute(
             'INSERT INTO logs (`from`, `to`, `msg`, `time`) '
