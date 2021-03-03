@@ -38,7 +38,9 @@ from objects.beatmap import RankedStatus
 from objects.player import Privileges
 from objects.score import Score
 from objects.score import SubmissionStatus
+from utils.misc import escape_enum
 from utils.misc import point_of_interest
+from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
     from objects.player import Player
@@ -48,7 +50,7 @@ if TYPE_CHECKING:
 domain = Domain('osu.ppy.sh')
 
 
-# Some helper decorators (used for /web/ connections)
+""" Some helper decorators (used for /web/ connections) """
 
 def _required_args(args: set[str], argset: str) -> Callable:
     def wrapper(f: Callable) -> Callable:
@@ -284,6 +286,8 @@ async def lastFM(p: 'Player', conn: Connection) -> Optional[bytes]:
             await p.ban(glob.bot, f'hq!osu relife 1/32')
             return b'-3'
 
+        # TODO: make a tool to remove the flags & send this as a dm.
+        #also add to db so they never are restricted on first one.
         p.enqueue(packets.notification('\n'.join([
             "Hey!",
             "It appears you have hq!osu's multiaccounting tool (relife) enabled.",
@@ -562,7 +566,7 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         'AND userid = %s AND mods = %s '
         'AND score = %s AND play_time', [
             s.mode.as_vanilla, s.bmap.md5,
-            s.player.id, int(s.mods), s.score
+            s.player.id, s.mods, s.score
         ]
     )
 
@@ -617,9 +621,9 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         '%s, %s, %s, %s, %s, %s, '
         '%s, %s, %s, %s, '
         '%s, %s, %s, %s)', [
-            s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, int(s.mods),
+            s.bmap.md5, s.score, s.pp, s.acc, s.max_combo, s.mods,
             s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu,
-            s.grade, int(s.status), s.mode.as_vanilla, s.play_time,
+            s.grade, s.status, s.mode.as_vanilla, s.play_time,
             s.time_elapsed, s.client_flags, s.player.id, s.perfect
         ]
     )
@@ -1006,6 +1010,7 @@ async def osuRate(p: 'Player', conn: Connection) -> Optional[bytes]:
     return f'alreadyvoted\n{avg}'.encode()
 
 @unique
+@pymysql_encode(escape_enum)
 class RankingType(IntEnum):
     Local   = 0
     Top     = 1
@@ -1029,7 +1034,7 @@ async def getScores(p: 'Player', conn: Connection) -> Optional[bytes]:
         # map has already been confirmed as unsubmitted.
         return b'-1|false'
 
-    mods = int(conn.args['mods'])
+    mods = Mods(int(conn.args['mods']))
     mode = GameMode.from_params(int(conn.args['m']), mods)
 
     map_set_id = int(conn.args['i'])
@@ -1466,6 +1471,7 @@ async def osuBMSubmitUpload(conn: Connection) -> Optional[bytes]:
 
     from enum import IntEnum, unique
     @unique
+    @pymysql_encode(escape_enum)
     class MapMetaType(IntEnum):
         Title = 0,
         Artist = 1,
@@ -1937,7 +1943,7 @@ async def api_get_scores(conn: Connection) -> Optional[bytes]:
 
     if mods:
         query.append('WHERE mods & %s > 0')
-        params.append(int(mods))
+        params.append(mods)
 
     query.append('ORDER BY id DESC LIMIT %s')
     params.append(limit)
@@ -2049,7 +2055,7 @@ async def register_account(conn: Connection) -> Optional[bytes]:
     # - be within 8-32 characters in length
     # - have more than 3 unique characters
     # - not be in the config's `disallowed_passwords` list
-    if not 8 < len(pw_txt) <= 32:
+    if not 8 <= len(pw_txt) <= 32:
         errors['password'].append('Must be 8-32 characters in length.')
 
     if len(set(pw_txt)) <= 3:
