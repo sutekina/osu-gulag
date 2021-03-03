@@ -268,7 +268,10 @@ create table map_requests
 	active tinyint(1) not null
 );
 
-
 # v3.2.1
 update scores_rx set id = id - 3074457345618258603;
 update scores_ap set id = id - 6148914691236517206;
+
+# v3.2.2
+alter table maps add max_combo int not null after total_length;
+alter table users change clan_rank clan_priv tinyint(1) default 0 not null;
