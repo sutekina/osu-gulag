@@ -41,7 +41,7 @@ from utils.misc import make_safe_name
 
 """ Bancho: handle connections from the osu! client """
 
-domain = Domain(re.compile(r'^c[e4-6]?\.ppy\.sh$'))
+domain = Domain(re.compile(r'(^c[e4-6]?\.sutekina\.tk$)|(^c[e4-6]?\.ppy\.sh$)'))
 
 @domain.route('/')
 async def bancho_http_handler(conn: Connection) -> bytes:

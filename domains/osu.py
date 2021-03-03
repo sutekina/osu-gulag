@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
 """ osu: handle connections from web, api, and beyond? """
 
-domain = Domain('osu.ppy.sh')
+domain = Domain(re.compile(r'(^osu.ppy.sh$)|(^osu.sutekina.tk$)'))
 
 
 """ Some helper decorators (used for /web/ connections) """
