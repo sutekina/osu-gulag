@@ -56,6 +56,8 @@ class CommandSet:
 
     def __init__(self, trigger: str, doc: str) -> None:
         self.trigger = trigger
+        self.doc = doc
+
         self.commands: list[Command] = []
 
     def add(self, priv: Privileges, aliases: list[str] = [],
@@ -1907,7 +1909,7 @@ async def process_commands(p: Player, t: Messageable,
                 ms_taken = (clock_ns() - start_time) / 1e6
 
                 return {
-                    'resp': f'{res} | Elapsed: {time_taken:.2f}ms',
+                    'resp': f'{res} | Elapsed: {ms_taken:.2f}ms',
                     'hidden': cmd.hidden
                 }
 
