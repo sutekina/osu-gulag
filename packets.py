@@ -13,12 +13,9 @@ from enum import unique
 from functools import cache
 from functools import lru_cache
 from functools import partialmethod
-from typing import Any
 from typing import Optional
+from typing import Sequence
 from typing import TYPE_CHECKING
-
-from cmyui import Ansi
-from cmyui import log
 
 from constants.gamemodes import GameMode
 from constants.mods import Mods
@@ -31,7 +28,6 @@ from objects.match import MatchWinConditions
 from objects.match import ScoreFrame
 from objects.match import SlotStatus
 from utils.misc import escape_enum
-from utils.misc import point_of_interest
 from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
@@ -57,7 +53,7 @@ class Packets(IntEnum):
     CHO_USER_ID = 5
     CHO_SEND_MESSAGE = 7
     CHO_PONG = 8
-    CHO_HANDLE_IRC_CHANGE_USERNAME = 9
+    CHO_HANDLE_IRC_CHANGE_USERNAME = 9 # unused
     CHO_HANDLE_IRC_QUIT = 10
     CHO_USER_STATS = 11
     CHO_USER_LOGOUT = 12
@@ -179,7 +175,7 @@ class BanchoPacket:
 
     async def handle(self, p: 'Player') -> None: ...
 
-Message = namedtuple('Message', ['client', 'msg', 'target', 'client_id'])
+Message = namedtuple('Message', ['sender', 'msg', 'recipient', 'sender_id'])
 Channel = namedtuple('Channel', ['name', 'topic', 'players'])
 
 class BanchoPacketReader:
@@ -243,7 +239,7 @@ class BanchoPacketReader:
         """Read all arguments from the internal buffer."""
         for arg_name, arg_type in self._current.args.items():
             # read value from buffer
-            val: Any = None
+            val: object = None
 
             # non-osu! datatypes
             if arg_type == osuTypes.i8:
@@ -376,13 +372,14 @@ class BanchoPacketReader:
         return val
 
     """ custom osu! types """
+
     def read_message(self) -> Message: # namedtuple
         """Read an osu! message from the internal buffer."""
         return Message(
-            client = self.read_string(),
+            sender = self.read_string(),
             msg = self.read_string(),
-            target = self.read_string(),
-            client_id = self.read_i32()
+            recipient = self.read_string(),
+            sender_id = self.read_i32()
         )
 
     def read_channel(self) -> Channel: # namedtuple
@@ -400,9 +397,7 @@ class BanchoPacketReader:
         # ignore match id (i16) and inprogress (i8).
         self.view = self.view[3:]
 
-        #m.type = MatchTypes(await self.read_i8())
-        if self.read_i8() == 1:
-            point_of_interest() # what is powerplay
+        self.read_i8() # powerplay unused
 
         m.mods = Mods(self.read_i32())
 
@@ -483,7 +478,7 @@ def write_string(s: str) -> bytearray:
 
     return ret
 
-def write_i32_list(l: tuple[int, ...]) -> bytearray:
+def write_i32_list(l: Sequence[int]) -> bytearray:
     """ Write `l` into bytes (int32 list). """
     ret = bytearray(len(l).to_bytes(2, 'little'))
 
@@ -492,13 +487,13 @@ def write_i32_list(l: tuple[int, ...]) -> bytearray:
 
     return ret
 
-def write_message(client: str, msg: str, target: str,
-                  client_id: int) -> bytearray:
+def write_message(sender: str, msg: str, recipient: str,
+                  sender_id: int) -> bytearray:
     """ Write params into bytes (osu! message). """
-    ret = bytearray(write_string(client))
+    ret = bytearray(write_string(sender))
     ret += write_string(msg)
-    ret += write_string(target)
-    ret += client_id.to_bytes(4, 'little', signed=True)
+    ret += write_string(recipient)
+    ret += sender_id.to_bytes(4, 'little', signed=True)
     return ret
 
 def write_channel(name: str, topic: str,
@@ -567,7 +562,7 @@ def write_scoreframe(s: ScoreFrame) -> bytearray:
         s.max_combo, s.perfect, s.current_hp, s.tag_byte, s.score_v2
     ))
 
-def write(packid: int, *args: tuple[Any, ...]) -> bytes:
+def write(packid: int, *args: Sequence[object]) -> bytes:
     """ Write `args` into bytes. """
     ret = bytearray(struct.pack('<Hx', packid))
 
@@ -619,11 +614,11 @@ def userID(id: int) -> bytes:
     )
 
 # packet id: 7
-def sendMessage(client: str, msg: str, target: str,
-                client_id: int) -> bytes:
+def sendMessage(sender: str, msg: str, recipient: str,
+                sender_id: int) -> bytes:
     return write(
         Packets.CHO_SEND_MESSAGE,
-        ((client, msg, target, client_id), osuTypes.message)
+        ((sender, msg, recipient, sender_id), osuTypes.message)
     )
 
 # packet id: 8
@@ -632,6 +627,7 @@ def pong() -> bytes:
     return write(Packets.CHO_PONG)
 
 # packet id: 9
+# NOTE: deprecated
 def changeUsername(old: str, new: str) -> bytes:
     return write(
         Packets.CHO_HANDLE_IRC_CHANGE_USERNAME,

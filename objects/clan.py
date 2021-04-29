@@ -17,7 +17,7 @@ __all__ = ('Clan', 'ClanPrivileges')
 @unique
 @pymysql_encode(escape_enum)
 class ClanPrivileges(IntEnum):
-    """A class to represent a clan members rank."""
+    """A class to represent a clan members privs."""
     Member = 1
     Officer = 2
     Owner = 3
@@ -93,7 +93,6 @@ class Clan:
 
         p.clan = None
         p.clan_priv = None
-        
     async def members_from_sql(self) -> None:
         """Fetch all members from sql."""
         # TODO: in the future, we'll want to add

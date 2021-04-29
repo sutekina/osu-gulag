@@ -4,6 +4,7 @@ import asyncio
 import lzma
 import time
 from pathlib import Path
+from typing import Coroutine
 from typing import TYPE_CHECKING
 
 from cmyui.osu import ReplayFrame
@@ -12,10 +13,10 @@ from cmyui.discord import Embed
 from cmyui import log, Ansi
 
 import packets
+import utils.misc
 from constants.gamemodes import GameMode
 from constants.privileges import Privileges
 from objects import glob
-from utils.misc import get_press_times
 
 if TYPE_CHECKING:
     from objects.score import Score
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 __all__ = ('donor_expiry', 'disconnect_ghosts',
            'replay_detections', 'reroll_bot_status')
 
-async def donor_expiry() -> None:
+async def donor_expiry() -> list[Coroutine]:
     """Add new donation ranks & enqueue tasks to remove current ones."""
     # TODO: this system can get quite a bit better; rather than just
     # removing, it should rather update with the new perks (potentially
@@ -59,10 +60,12 @@ async def donor_expiry() -> None:
         'AND priv & 48' # 48 = Supporter | Premium
     )
 
-    loop = asyncio.get_running_loop()
+    coros = []
 
     async for donation in glob.db.iterall(query, _dict=False):
-        loop.create_task(rm_donor(*donation))
+        coros.append(rm_donor(*donation))
+
+    return coros
 
 PING_TIMEOUT = 300000 // 1000 # defined by osu!
 async def disconnect_ghosts() -> None:
@@ -103,13 +106,12 @@ async def analyze_score(score: 'Score') -> None:
         # for any gamemode with holds. it's still relatively
         # reliable for taiko though :D.
 
-        press_times = get_press_times(frames)
+        press_times = utils.misc.get_press_times(frames)
         config = glob.config.surveillance['hitobj_low_presstimes']
 
-        cond = lambda pt: (sum(pt) / len(pt) < config['value']
-                           and len(pt) > config['min_presses'])
-
-        if any(map(cond, press_times.values())):
+        if any([sum(pt) / len(pt) < config['value'] and
+                len(pt) > config['min_presses']
+                for pt in press_times.values()]):
             # at least one of the keys is under the
             # minimum, log this occurence to Discord.
             webhook_url = glob.config.webhooks['surveillance']

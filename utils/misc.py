@@ -1,11 +1,20 @@
 # -*- coding: utf-8 -*-
 
+import dill as pickle
 import inspect
+import io
 import pymysql
+import requests
+import secrets
+import sys
+import types
+import zipfile
 from pathlib import Path
 from typing import Callable
 from typing import Sequence
+from typing import Type
 
+from objects import glob
 from cmyui.logging import Ansi
 from cmyui.logging import log
 from cmyui.logging import printc
@@ -13,40 +22,17 @@ from cmyui.osu.replay import Keys
 from cmyui.osu.replay import ReplayFrame
 
 __all__ = (
-    'point_of_interest',
-    'get_average_press_times',
-    'make_safe_name'
+    'get_press_times',
+    'make_safe_name',
+    'download_achievement_images',
+    'seconds_readable',
+    'install_excepthook',
+    'get_appropriate_stacktrace',
+    'log_strange_occurrence',
+
+    'pymysql_encode',
+    'escape_enum'
 )
-
-def point_of_interest():
-    """Leave a pseudo-breakpoint somewhere to ask the user if
-       they could pls submit their stacktrace to cmyui <3."""
-
-    # TODO: fix this, circular import thing
-    #ver_str = f'Running gulag v{glob.version!r} | cmyui_pkg v{cmyui.__version__}'
-    #printc(ver_str, Ansi.LBLUE)
-
-    for fi in inspect.stack()[1:]:
-        if fi.function == '_run':
-            # go all the way up to server start func
-            break
-
-        file = Path(fi.filename)
-
-        # print line num, index, func name & locals for each frame.
-        log('[{function}() @ {fname} L{lineno}:{index}] {frame.f_locals}'.format(
-            **fi._asdict(), fname=file.name
-        ))
-
-    msg_str = '\n'.join((
-        "Hey! If you're seeing this, osu! just did something pretty strange,",
-        "and the gulag devs have left a breakpoint here. We'd really appreciate ",
-        "if you could screenshot the data above, and send it to cmyui, either via ",
-        "Discord (cmyui#0425), or by email (cmyuiosu@gmail.com). Thanks! 😳😳😳"
-    ))
-
-    printc(msg_str, Ansi.LRED)
-    input('To close this menu & unfreeze, simply hit the enter key.')
 
 useful_keys = (Keys.M1, Keys.M2,
                Keys.K1, Keys.K2)
@@ -85,10 +71,154 @@ def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(' ', '_')
 
+def _download_achievement_images_mirror(achievements_path: Path) -> bool:
+    """Download all used achievement images (using mirror's zip)."""
+    log('Downloading achievement images from mirror.', Ansi.LCYAN)
+    r = requests.get('https://cmyui.xyz/achievement_images.zip')
+
+    if r.status_code != 200:
+        log('Failed to fetch from mirror, trying osu! servers.', Ansi.LRED)
+        return False
+
+    with io.BytesIO(r.content) as data:
+        with zipfile.ZipFile(data) as myfile:
+            myfile.extractall(achievements_path)
+
+    return True
+
+def _download_achievement_images_osu(achievements_path: Path) -> bool:
+    """Download all used achievement images (one by one, from osu!)."""
+    achs = []
+
+    for res in ('', '@2x'):
+        for gm in ('osu', 'taiko', 'fruits', 'mania'):
+            # only osu!std has 9 & 10 star pass/fc medals.
+            for n in range(1, 1 + (10 if gm == 'osu' else 8)):
+                achs.append(f'{gm}-skill-pass-{n}{res}.png')
+                achs.append(f'{gm}-skill-fc-{n}{res}.png')
+
+        for n in (500, 750, 1000, 2000):
+            achs.append(f'osu-combo-{n}{res}.png')
+
+    log('Downloading achievement images from osu!.', Ansi.LCYAN)
+
+    for ach in achs:
+        r = requests.get(f'https://assets.ppy.sh/medals/client/{ach}')
+        if r.status_code != 200:
+            return False
+
+        log(f'Saving achievement: {ach}', Ansi.LCYAN)
+        (achievements_path / f'{ach}').write_bytes(r.content)
+
+    return True
+
+def download_achievement_images(achievements_path: Path) -> None:
+    """Download all used achievement images (using best available source)."""
+    # try using my cmyui.xyz mirror (zip file)
+    downloaded = _download_achievement_images_mirror(achievements_path)
+
+    if not downloaded:
+        # as fallback, download individual files from osu!
+        downloaded = _download_achievement_images_osu(achievements_path)
+
+    if downloaded:
+        log('Successfully saved all achievement images.', Ansi.LGREEN)
+    else:
+        # TODO: make the code safe in this state
+        log('Failed to download achievement images.', Ansi.LRED)
+        achievements_path.rmdir()
+
+def seconds_readable(seconds: int) -> str:
+    """Turn seconds as an int into 'DD:HH:MM:SS'."""
+    r: list[str] = []
+
+    days, seconds = divmod(seconds, 60 * 60 * 24)
+    if days:
+        r.append(f'{days:02d}')
+
+    hours, seconds = divmod(seconds, 60 * 60)
+    if hours:
+        r.append(f'{hours:02d}')
+
+    minutes, seconds = divmod(seconds, 60)
+    r.append(f'{minutes:02d}')
+
+    r.append(f'{seconds % 60:02d}')
+    return ':'.join(r)
+
+def install_excepthook():
+    sys._excepthook = sys.excepthook # backup
+    def _excepthook(
+        type_: Type[BaseException],
+        value: BaseException,
+        traceback: types.TracebackType
+    ):
+        if type_ is KeyboardInterrupt:
+            print('\33[2K\r', end='Aborted startup.')
+            return
+        print('\x1b[0;31mgulag ran into an issue '
+            'before starting up :(\x1b[0m')
+        sys._excepthook(type_, value, traceback)
+    sys.excepthook = _excepthook
+
+def get_appropriate_stacktrace() -> list[inspect.FrameInfo]:
+    stack = inspect.stack()[1:]
+    for idx, frame in enumerate(stack):
+        if frame.function == 'run':
+            break
+    else:
+        raise Exception
+
+    return [{
+        'function': frame.function,
+        'filename': Path(frame.filename).name,
+        'lineno': frame.lineno,
+        'charno': frame.index,
+        'locals': {k: repr(v) for k, v in frame.frame.f_locals.items()}
+    } for frame in stack[:idx]]
+
+STRANGE_LOG_DIR = Path.cwd() / '.data/logs'
+async def log_strange_occurrence(obj: object) -> None:
+    pickled_obj = pickle.dumps(obj)
+    uploaded = False
+
+    if glob.config.automatically_report_problems:
+        # automatically reporting problems to cmyui's server
+        async with glob.http.post(
+            url = 'https://log.cmyui.xyz/',
+            headers = {'Gulag-Version': repr(glob.version),
+                       'Gulag-Domain': glob.config.domain},
+            data = pickled_obj,
+        ) as resp:
+            if (
+                resp.status == 200 and
+                (await resp.read()) == b'ok'
+            ):
+                uploaded = True
+                log("Logged strange occurrence to cmyui's server.", Ansi.LBLUE)
+                log("Thank you for your participation! <3", Ansi.LBLUE)
+            else:
+                log(f"Autoupload to cmyui's server failed (HTTP {resp.status})", Ansi.LRED)
+
+    if not uploaded:
+        # log to a file locally, and prompt the user
+        while True:
+            log_file = STRANGE_LOG_DIR / f'strange_{secrets.token_hex(4)}.db'
+            if not log_file.exists():
+                break
+
+        log_file.touch(exist_ok=False)
+        log_file.write_bytes(pickled_obj)
+
+        log('Logged strange occurrence to', Ansi.LYELLOW, end=' ')
+        printc('/'.join(log_file.parts[-4:]), Ansi.LBLUE)
+
+        log("Greatly appreciated if you could forward this to cmyui#0425 :)", Ansi.LYELLOW)
+
 def pymysql_encode(conv: Callable):
     """Decorator to allow for adding to pymysql's encoders."""
     def wrapper(cls):
-        pymysql.converters.encoders |= {cls: conv}
+        pymysql.converters.encoders[cls] = conv
         return cls
     return wrapper
 

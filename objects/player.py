@@ -9,7 +9,6 @@ from enum import IntEnum
 from enum import unique
 from functools import cached_property
 from functools import partial
-from typing import Any
 from typing import Coroutine
 from typing import Optional
 from typing import TYPE_CHECKING
@@ -29,6 +28,7 @@ from objects.channel import Channel
 from objects.match import Match
 from objects.match import MatchTeams
 from objects.match import MatchTeamTypes
+from objects.match import Slot
 from objects.match import SlotStatus
 from utils.misc import escape_enum
 from utils.misc import pymysql_encode
@@ -44,6 +44,8 @@ __all__ = (
     'Status',
     'Player'
 )
+
+BASE_DOMAIN = glob.config.domain
 
 @unique
 @pymysql_encode(escape_enum)
@@ -117,9 +119,15 @@ class Player:
     pres_filter: `PresenceFilter`
         The scope of users the client can currently see.
 
-    menu_options: `dict[int, dict[str, Any]]`
+    menu_options: `dict[int, dict[str, object]]`
         The current osu! chat menu options available to the player.
         XXX: These may eventually have a timeout.
+
+    bot_client: `bool`
+        Whether this is a bot account.
+
+    tourney_client: `bool`
+        Whether this is a management/spectator tourney client.
 
     _queue: `bytearray`
         Bytes enqueued to the player which will be transmitted
@@ -129,14 +137,18 @@ class Player:
     """
     __slots__ = (
         'token', 'id', 'name', 'safe_name', 'pw_bcrypt',
-        'priv', 'stats', 'status', 'friends', 'channels',
+        'priv', 'stats', 'status', 'friends', 'blocks', 'channels',
         'spectators', 'spectating', 'match', 'stealth',
         'clan', 'clan_priv', 'achievements',
         'recent_scores', 'last_np', 'country', 'location',
         'utc_offset', 'pm_private',
         'away_msg', 'silence_end', 'in_lobby', 'osu_ver',
         'pres_filter', 'login_time', 'last_recv_time',
-        'menu_options', '_queue', '__dict__'
+        'menu_options',
+
+        'bot_client', 'tourney_client',
+        'api_key', '_queue',
+        '__dict__'
     )
 
     def __init__(self, id: int, name: str,
@@ -156,12 +168,15 @@ class Player:
 
         # ensure priv is of type Privileges
         self.priv = (priv if isinstance(priv, Privileges) else
-                    Privileges(priv))
+                     Privileges(priv))
 
         self.stats: dict[GameMode, ModeData] = {}
         self.status = Status()
 
-        self.friends: set[int] = set() # userids, not player objects
+        # userids, not player objects
+        self.friends: set[int] = set()
+        self.blocks: set[int] = set()
+
         self.channels: list[Channel] = []
         self.spectators: list[Player] = []
         self.spectating: Optional[Player] = None
@@ -205,7 +220,18 @@ class Player:
         }
 
         # {id: {'callback', func, 'timeout': unixt, 'reusable': False}, ...}
-        self.menu_options: dict[int, dict[str, Any]] = {}
+        self.menu_options: dict[int, dict[str, object]] = {}
+
+        # subject to possible change in the future,
+        # although if anything, bot accounts will
+        # probably just use the /api/ routes?
+        self.bot_client = extras.get('bot_client', False)
+        if self.bot_client:
+            self.enqueue = lambda data: None
+
+        self.tourney_client = extras.get('tourney_client', False)
+
+        self.api_key = extras.get('api_key', None)
 
         # packet queue
         self._queue = bytearray()
@@ -220,21 +246,33 @@ class Player:
     @cached_property
     def url(self) -> str:
         """The url to the player's profile."""
-        return f'https://{glob.config.domain}/u/{self.id}'
+        # NOTE: this is currently never wiped because
+        # domain & id cannot be changed in-game; if this
+        # ever changes, it will need to be wiped.
+        return f'https://{BASE_DOMAIN}/u/{self.id}'
 
     @cached_property
     def embed(self) -> str:
         """An osu! chat embed to the player's profile."""
+        # NOTE: this is currently never wiped because
+        # url & name cannot be changed in-game; if this
+        # ever changes, it will need to be wiped.
         return f'[{self.url} {self.name}]'
 
     @cached_property
     def avatar_url(self) -> str:
         """The url to the player's avatar."""
-        return f'https://a.{glob.config.domain}/{self.id}'
+        # NOTE: this is currently never wiped because
+        # domain & id cannot be changed in-game; if this
+        # ever changes, it will need to be wiped.
+        return f'https://a.{BASE_DOMAIN}/{self.id}'
 
     @cached_property
     def full_name(self) -> str:
         """The user's "full" name; including their clan tag."""
+        # NOTE: this is currently only wiped when the
+        # user leaves their clan; if name/clantag ever
+        # become changeable, it will need to be wiped.
         if self.clan:
             return f'[{self.clan.tag}] {self.name}'
         else:
@@ -323,7 +361,7 @@ class Player:
 
         # leave channels
         while self.channels:
-            self.leave_channel(self.channels[0])
+            self.leave_channel(self.channels[0], kick=False)
 
         # remove from playerlist and
         # enqueue logout to all users.
@@ -349,6 +387,9 @@ class Player:
         if 'bancho_priv' in self.__dict__:
             del self.bancho_priv # wipe cached_property
 
+        if 'bancho_priv' in self.__dict__:
+            del self.bancho_priv # wipe cached_property
+
     async def add_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, adding `bits`."""
         self.priv |= bits
@@ -358,14 +399,6 @@ class Player:
             'SET priv = %s '
             'WHERE id = %s',
             [self.priv, self.id]
-        )
-
-    async def create_stats(self) -> None:
-        """ create stats poog champ"""
-        await glob.db.execute(
-            'INSERT INTO stats '
-            '(id) VALUES (%s)',
-            [self.id]
         )
 
         if 'bancho_priv' in self.__dict__:
@@ -381,15 +414,10 @@ class Player:
             'WHERE id = %s',
             [self.priv, self.id]
         )
-
-    async def remove_stats(self) -> None: 
-        """delete `stats` for the person ^_^"""
-        await glob.db.execute(
-            'DELETE FROM stats '
-            'WHERE (id = %s)',
-            [self.id]
-        )
         
+        if 'bancho_priv' in self.__dict__:
+            del self.bancho_priv # wipe cached_property
+
         if 'bancho_priv' in self.__dict__:
             del self.bancho_priv # wipe cached_property
 
@@ -419,8 +447,7 @@ class Player:
     async def unrestrict(self, admin: 'Player', reason: str) -> None:
         """Restrict `self` for `reason`, and log to sql."""
         await self.add_privs(Privileges.Normal)
-        await self.create_stats()
-        
+
         log_msg = f'{admin} unrestricted for "{reason}".'
         await glob.db.execute(
             'INSERT INTO logs '
@@ -498,6 +525,12 @@ class Player:
             self.enqueue(packets.matchJoinFail())
             return False
 
+        if self.id in m.tourney_clients:
+            # the user is already in the match with a tourney client.
+            # users cannot spectate themselves so this is not possible.
+            self.enqueue(packets.matchJoinFail())
+            return False
+
         if self is not m.host:
             # match already exists, we're simply joining.
             # NOTE: staff members have override to pw and can
@@ -544,7 +577,7 @@ class Player:
     def leave_match(self) -> None:
         """Attempt to remove `self` from their match."""
         if not self.match:
-            if glob.config.debug:
+            if glob.app.debug:
                 log(f"{self} tried leaving a match they're not in?", Ansi.LYELLOW)
             return
 
@@ -552,7 +585,7 @@ class Player:
 
         self.leave_channel(self.match.chat)
 
-        if all(map(lambda s: s.empty(), self.match.slots)):
+        if all(map(Slot.empty, self.match.slots)):
             # multi is now empty, chat has been removed.
             # remove the multi from the channels list.
             log(f'Match {self.match} finished.')
@@ -618,12 +651,12 @@ class Player:
         for p in (c.players if c.instance else glob.players):
             p.enqueue(packets.channelInfo(*c.basic_info))
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{self} joined {c}.')
 
         return True
 
-    def leave_channel(self, c: Channel) -> None:
+    def leave_channel(self, c: Channel, kick: bool = True) -> None:
         """Attempt to remove `self` from `c`."""
         # ensure they're in the chan.
         if self not in c:
@@ -632,17 +665,18 @@ class Player:
         c.remove(self) # remove from c.players
         self.channels.remove(c) # remove from p.channels
 
-        self.enqueue(packets.channelKick(c.name))
+        if kick:
+            self.enqueue(packets.channelKick(c.name))
 
         # update channel usercounts for all clients that can see.
         # for instanced channels, enqueue update to only players
         # in the instance; for normal channels, enqueue to all.
-        targets = c.players if c.instance else glob.players
+        recipients = c.players if c.instance else glob.players
 
-        for p in targets:
+        for p in recipients:
             p.enqueue(packets.channelInfo(*c.basic_info))
 
-        if glob.config.debug:
+        if glob.app.debug:
             log(f'{self} left {c}.')
 
     def add_spectator(self, p: 'Player') -> None:
@@ -716,30 +750,70 @@ class Player:
 
         self.friends.add(p.id)
         await glob.db.execute(
-            'INSERT INTO friendships '
-            'VALUES (%s, %s)',
+            "REPLACE INTO relationships "
+            "VALUES (%s, %s, 'friend')",
             [self.id, p.id]
         )
 
-        log(f'{self} added {p} to their friends.')
+        log(f'{self} friended {p}.')
 
     async def remove_friend(self, p: 'Player') -> None:
         """Attempt to remove `p` from `self`'s friends."""
-        if not p.id in self.friends:
-            log(f'{self} tried to remove {p}, who is not their friend!', Ansi.LYELLOW)
+        if p.id not in self.friends:
+            log(f'{self} tried to unfriend {p}, who is not their friend!', Ansi.LYELLOW)
             return
 
         self.friends.remove(p.id)
         await glob.db.execute(
-            'DELETE FROM friendships '
+            'DELETE FROM relationships '
             'WHERE user1 = %s AND user2 = %s',
             [self.id, p.id]
         )
 
-        log(f'{self} removed {p} from their friends.')
+        log(f'{self} unfriended {p}.')
 
-    async def fetch_geoloc(self, ip: str) -> None:
-        """Fetch a player's geolocation data based on their ip."""
+    async def add_block(self, p: 'Player') -> None:
+        """Attempt to add `p` to `self`'s blocks."""
+        if p.id in self.blocks:
+            log(f"{self} tried to block {p}, who they've already blocked!", Ansi.LYELLOW)
+            return
+
+        self.blocks.add(p.id)
+        await glob.db.execute(
+            "REPLACE INTO relationships "
+            "VALUES (%s, %s, 'block')",
+            [self.id, p.id]
+        )
+
+        log(f'{self} blocked {p}.')
+
+    async def remove_block(self, p: 'Player') -> None:
+        """Attempt to remove `p` from `self`'s blocks."""
+        if p.id not in self.blocks:
+            log(f"{self} tried to unblock {p}, who they haven't blocked!", Ansi.LYELLOW)
+            return
+
+        self.blocks.remove(p.id)
+        await glob.db.execute(
+            'DELETE FROM relationships '
+            'WHERE user1 = %s AND user2 = %s',
+            [self.id, p.id]
+        )
+
+        log(f'{self} unblocked {p}.')
+
+    def fetch_geoloc_db(self, ip: str) -> None:
+        """Fetch geolocation data based on ip (using local db)."""
+        res = glob.geoloc_db.city(ip)
+
+        iso_code = res.country.iso_code
+        loc = res.location
+
+        self.country = (country_codes[iso_code], iso_code)
+        self.location = (loc.latitude, loc.longitude)
+
+    async def fetch_geoloc_web(self, ip: str) -> None:
+        """Fetch geolocation data based on ip (using ip-api)."""
         url = f'http://ip-api.com/line/{ip}'
 
         async with glob.http.get(url) as resp:
@@ -750,14 +824,16 @@ class Player:
             status, *lines = (await resp.text()).split('\n')
 
             if status != 'success':
-                log(f'Failed to get geoloc data: {lines[0]}.', Ansi.LRED)
+                err_msg = lines[0]
+                if err_msg == 'invalid query':
+                    err_msg += f' ({url})'
+
+                log(f'Failed to get geoloc data: {err_msg}.', Ansi.LRED)
                 return
 
-        country = lines[1]
+        iso_code = lines[1]
 
-        # store their country as a 2-letter code, and as a number.
-        # the players location is stored for the ingame world map.
-        self.country = (country_codes[country], country)
+        self.country = (country_codes[iso_code], iso_code)
         self.location = (float(lines[6]), float(lines[7])) # lat, long
 
     async def unlock_achievement(self, a: 'Achievement') -> None:
@@ -771,62 +847,23 @@ class Player:
 
         self.achievements[a.mode].add(a)
 
-    async def update_stats(self, mode: GameMode = GameMode.vn_std) -> None:
-        """Update a player's stats in-game and in sql."""
-        table = mode.sql_table
-
+    async def relationships_from_sql(self) -> None:
+        """Retrieve `self`'s relationships from sql."""
         res = await glob.db.fetchall(
-            f'SELECT s.pp, s.acc FROM {table} s '
-            'LEFT JOIN maps m ON s.map_md5 = m.md5 '
-            'WHERE s.userid = %s AND s.mode = %s '
-            'AND s.status = 2 AND m.status IN (1, 2) '
-            'ORDER BY s.pp DESC LIMIT 100',
-            [self.id, mode.as_vanilla]
+            'SELECT user2, type '
+            'FROM relationships '
+            'WHERE user1 = %s',
+            [self.id]
         )
 
-        if not res:
-            return # ?
+        for row in res:
+            if row['type'] == 'friend':
+                self.friends.add(row['user2'])
+            else:
+                self.blocks.add(row['user2'])
 
-        stats = self.stats[mode]
-
-        # increment playcount
-        stats.plays += 1
-
-        # calculate avg acc based on top 50 scores
-        stats.acc = sum([row['acc'] for row in res[:50]]) / min(50, len(res))
-
-        # calculate weighted pp based on top 100 scores
-        stats.pp = round(sum([row['pp'] * 0.95 ** i
-                              for i, row in enumerate(res)]))
-
-        # keep stats up to date in sql
-        await glob.db.execute(
-            'UPDATE stats SET pp_{0:sql} = %s, '
-            'plays_{0:sql} = plays_{0:sql} + 1, '
-            'acc_{0:sql} = %s WHERE id = %s'.format(mode),
-            [stats.pp, stats.acc, self.id]
-        )
-
-        # calculate rank.
-        res = await glob.db.fetch(
-            'SELECT COUNT(*) AS c FROM stats s '
-            'LEFT JOIN users u USING(id) '
-            f'WHERE s.pp_{mode:sql} > %s '
-            'AND u.priv & 1',
-            [stats.pp]
-        )
-
-        stats.rank = res['c'] + 1
-        self.enqueue(packets.userStats(self))
-
-    async def friends_from_sql(self) -> None:
-        """Retrieve `self`'s friends from sql."""
-        _friends = {row['user2'] async for row in glob.db.iterall(
-            'SELECT user2 FROM friendships WHERE user1 = %s', [self.id]
-        )}
-
-        # always have self & bot added to friends.
-        self.friends = _friends | {1, self.id}
+        # always have bot added to friends.
+        self.friends.add(1)
 
     async def achievements_from_sql(self) -> None:
         """Retrieve `self`'s achievements from sql."""
@@ -834,13 +871,13 @@ class Player:
             # get all users achievements for this mode
             res = await glob.db.fetchall(
                 'SELECT ua.achid id FROM user_achievements ua '
-                'LEFT JOIN achievements a ON a.id = ua.achid '
+                'INNER JOIN achievements a ON a.id = ua.achid '
                 'WHERE ua.userid = %s AND a.mode = %s',
                 [self.id, mode]
             )
 
             if not res:
-                # user has no achievements for this mode.
+                # user has no achievements for this mode
                 continue
 
             # get cached achievements for this mode
@@ -858,7 +895,7 @@ class Player:
             res = await glob.db.fetch(
                 'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
                 'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
-                'playtime_{0:sql} playtime, maxcombo_{0:sql} max_combo '
+                'playtime_{0:sql} playtime, max_combo_{0:sql} max_combo '
                 'FROM stats WHERE id = %s'.format(mode),
                 [self.id]
             )
@@ -869,43 +906,22 @@ class Player:
 
             # calculate rank.
             res['rank'] = (await glob.db.fetch(
-                'SELECT COUNT(*) AS c FROM stats '
-                'LEFT JOIN users USING(id) '
-                f'WHERE pp_{mode:sql} > %s '
-                'AND priv & 1', [res['pp']]
-            ))['c'] + 1
+                'SELECT COUNT(*) AS higher_pp_players '
+                'FROM stats s '
+                'INNER JOIN users u USING(id) '
+                f'WHERE s.pp_{mode:sql} > %s '
+                'AND u.priv & 1 and u.id != %s',
+                [res['pp'], self.id]
+            ))['higher_pp_players'] + 1
 
             # update stats
             self.stats[mode] = ModeData(**res)
 
-    async def stats_from_sql(self, mode: GameMode) -> None:
-        """Retrieve `self`'s `mode` stats from sql."""
-        res = await glob.db.fetch(
-            'SELECT tscore_{0:sql} tscore, rscore_{0:sql} rscore, '
-            'pp_{0:sql} pp, plays_{0:sql} plays, acc_{0:sql} acc, '
-            'playtime_{0:sql} playtime, maxcombo_{0:sql} max_combo '
-            'FROM stats WHERE id = %s'.format(mode),
-            [self.id]
-        )
-
-        if not res:
-            log(f"Failed to fetch {self}'s {mode!r} stats.", Ansi.LRED)
-            return
-
-        # calculate rank.
-        res['rank'] = await glob.db.fetch(
-            'SELECT COUNT(*) AS c FROM stats '
-            'LEFT JOIN users USING(id) '
-            f'WHERE pp_{mode:sql} > %s '
-            'AND priv & 1',
-            [res['pp']]
-        )['c']
-
-        self.stats[mode] = ModeData(**res)
-
-    async def add_to_menu(self, coroutine: Coroutine,
-                          timeout: int = -1, reusable: bool = False
-                         ) -> int:
+    async def add_to_menu(
+        self, coroutine: Coroutine,
+        timeout: int = -1,
+        reusable: bool = False
+    ) -> int:
         """Add a valid callback to the user's osu! chat options."""
         # generate random negative number in int32 space as the key.
         rand = partial(random.randint, 64, 0x7fffffff)
@@ -913,18 +929,17 @@ class Player:
             ...
 
         # append the callback to their menu options w/ args.
-        self.menu_options |= {
-            randnum: {
-                'callback': coroutine,
-                'reusable': reusable,
-                'timeout': timeout if timeout != -1 else 0x7fffffff
-            }
+        self.menu_options[randnum] = {
+            'callback': coroutine,
+            'reusable': reusable,
+            'timeout': timeout if timeout != -1 else 0x7fffffff
         }
 
         # return the key.
         return randnum
 
     async def update_latest_activity(self) -> None:
+        """Update the player's latest activity in the database."""
         await glob.db.execute(
             'UPDATE users '
             'SET latest_activity = UNIX_TIMESTAMP() '
@@ -948,9 +963,22 @@ class Player:
         """Enqueue `sender`'s `msg` to `self`. Sent in `chan`, or dm."""
         self.enqueue(
             packets.sendMessage(
-                client = sender.name,
+                sender = sender.name,
                 msg = msg,
-                target = (chan or self).name,
-                client_id = sender.id
+                recipient = (chan or self).name,
+                sender_id = sender.id
+            )
+        )
+
+    def send_bot(self, msg: str) -> None:
+        """Enqueue `msg` to `self` from bot."""
+        bot = glob.bot
+
+        self.enqueue(
+            packets.sendMessage(
+                sender = bot.name,
+                msg = msg,
+                recipient = self.name,
+                sender_id = bot.id
             )
         )

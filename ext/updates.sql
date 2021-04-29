@@ -1,6 +1,6 @@
 # This file contains any sql updates, along with the
 # version they are required from. Touching this without
-# atleast reading utils/updater.py is certainly a bad idea :)
+# at least reading utils/updater.py is certainly a bad idea :)
 
 # v3.0.6
 alter table users change name_safe safe_name varchar(32) not null;
@@ -191,22 +191,22 @@ insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (
 insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (38, 'taiko-skill-fc-6', 'Rhythm''s Call', 'Heralding true skill.', 'score.perfect and 7 >= score.sr > 6', 1);
 insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (39, 'taiko-skill-fc-7', 'Time Everlasting', 'Not a single beat escapes you.', 'score.perfect and 8 >= score.sr > 7', 1);
 insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (40, 'taiko-skill-fc-8', 'The Drummer''s Throne', 'Percussive brilliance befitting royalty alone.', 'score.perfect and 9 >= score.sr > 8', 1);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (41, 'ctb-skill-pass-1', 'A Slice Of Life', 'Hey, this fruit catching business isn''t bad.', '(score.mods & 259 == 0) and 2 >= score.sr > 1', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (42, 'ctb-skill-pass-2', 'Dashing Ever Forward', 'Fast is how you do it.', '(score.mods & 259 == 0) and 3 >= score.sr > 2', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (43, 'ctb-skill-pass-3', 'Zesty Disposition', 'No scurvy for you, not with that much fruit.', '(score.mods & 259 == 0) and 4 >= score.sr > 3', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (44, 'ctb-skill-pass-4', 'Hyperdash ON!', 'Time and distance is no obstacle to you.', '(score.mods & 259 == 0) and 5 >= score.sr > 4', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (45, 'ctb-skill-pass-5', 'It''s Raining Fruit', 'And you can catch them all.', '(score.mods & 259 == 0) and 6 >= score.sr > 5', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (46, 'ctb-skill-pass-6', 'Fruit Ninja', 'Legendary techniques.', '(score.mods & 259 == 0) and 7 >= score.sr > 6', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (47, 'ctb-skill-pass-7', 'Dreamcatcher', 'No fruit, only dreams now.', '(score.mods & 259 == 0) and 8 >= score.sr > 7', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (48, 'ctb-skill-pass-8', 'Lord of the Catch', 'Your kingdom kneels before you.', '(score.mods & 259 == 0) and 9 >= score.sr > 8', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (49, 'ctb-skill-fc-1', 'Sweet And Sour', 'Apples and oranges, literally.', 'score.perfect and 2 >= score.sr > 1', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (50, 'ctb-skill-fc-2', 'Reaching The Core', 'The seeds of future success.', 'score.perfect and 3 >= score.sr > 2', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (51, 'ctb-skill-fc-3', 'Clean Platter', 'Clean only of failure. It is completely full, otherwise.', 'score.perfect and 4 >= score.sr > 3', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (52, 'ctb-skill-fc-4', 'Between The Rain', 'No umbrella needed.', 'score.perfect and 5 >= score.sr > 4', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (53, 'ctb-skill-fc-5', 'Addicted', 'That was an overdose?', 'score.perfect and 6 >= score.sr > 5', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (54, 'ctb-skill-fc-6', 'Quickening', 'A dash above normal limits.', 'score.perfect and 7 >= score.sr > 6', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (55, 'ctb-skill-fc-7', 'Supersonic', 'Faster than is reasonably necessary.', 'score.perfect and 8 >= score.sr > 7', 2);
-insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (56, 'ctb-skill-fc-8', 'Dashing Scarlet', 'Speed beyond mortal reckoning.', 'score.perfect and 9 >= score.sr > 8', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (41, 'fruits-skill-pass-1', 'A Slice Of Life', 'Hey, this fruit catching business isn''t bad.', '(score.mods & 259 == 0) and 2 >= score.sr > 1', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (42, 'fruits-skill-pass-2', 'Dashing Ever Forward', 'Fast is how you do it.', '(score.mods & 259 == 0) and 3 >= score.sr > 2', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (43, 'fruits-skill-pass-3', 'Zesty Disposition', 'No scurvy for you, not with that much fruit.', '(score.mods & 259 == 0) and 4 >= score.sr > 3', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (44, 'fruits-skill-pass-4', 'Hyperdash ON!', 'Time and distance is no obstacle to you.', '(score.mods & 259 == 0) and 5 >= score.sr > 4', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (45, 'fruits-skill-pass-5', 'It''s Raining Fruit', 'And you can catch them all.', '(score.mods & 259 == 0) and 6 >= score.sr > 5', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (46, 'fruits-skill-pass-6', 'Fruit Ninja', 'Legendary techniques.', '(score.mods & 259 == 0) and 7 >= score.sr > 6', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (47, 'fruits-skill-pass-7', 'Dreamcatcher', 'No fruit, only dreams now.', '(score.mods & 259 == 0) and 8 >= score.sr > 7', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (48, 'fruits-skill-pass-8', 'Lord of the Catch', 'Your kingdom kneels before you.', '(score.mods & 259 == 0) and 9 >= score.sr > 8', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (49, 'fruits-skill-fc-1', 'Sweet And Sour', 'Apples and oranges, literally.', 'score.perfect and 2 >= score.sr > 1', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (50, 'fruits-skill-fc-2', 'Reaching The Core', 'The seeds of future success.', 'score.perfect and 3 >= score.sr > 2', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (51, 'fruits-skill-fc-3', 'Clean Platter', 'Clean only of failure. It is completely full, otherwise.', 'score.perfect and 4 >= score.sr > 3', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (52, 'fruits-skill-fc-4', 'Between The Rain', 'No umbrella needed.', 'score.perfect and 5 >= score.sr > 4', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (53, 'fruits-skill-fc-5', 'Addicted', 'That was an overdose?', 'score.perfect and 6 >= score.sr > 5', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (54, 'fruits-skill-fc-6', 'Quickening', 'A dash above normal limits.', 'score.perfect and 7 >= score.sr > 6', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (55, 'fruits-skill-fc-7', 'Supersonic', 'Faster than is reasonably necessary.', 'score.perfect and 8 >= score.sr > 7', 2);
+insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (56, 'fruits-skill-fc-8', 'Dashing Scarlet', 'Speed beyond mortal reckoning.', 'score.perfect and 9 >= score.sr > 8', 2);
 insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (57, 'mania-skill-pass-1', 'First Steps', 'It isn''t 9-to-5, but 1-to-9. Keys, that is.', '(score.mods & 259 == 0) and 2 >= score.sr > 1', 3);
 insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (58, 'mania-skill-pass-2', 'No Normal Player', 'Not anymore, at least.', '(score.mods & 259 == 0) and 3 >= score.sr > 2', 3);
 insert into achievements (`id`, `file`, `name`, `desc`, `cond`, `mode`) values (59, 'mania-skill-pass-3', 'Impulse Drive', 'Not quite hyperspeed, but getting close.', '(score.mods & 259 == 0) and 4 >= score.sr > 3', 3);
@@ -275,3 +275,55 @@ update scores_ap set id = id - 6148914691236517206;
 # v3.2.2
 alter table maps add max_combo int not null after total_length;
 alter table users change clan_rank clan_priv tinyint(1) default 0 not null;
+
+# v3.2.3
+alter table users add api_key char(36) default NULL null;
+create unique index users_api_key_uindex on users (api_key);
+
+# v3.2.4
+update achievements set file = replace(file, 'ctb', 'fruits') where mode = 2;
+
+# v3.2.5
+update achievements set cond = '(score.mods & 1 == 0) and 1 <= score.sr < 2' where file in ('osu-skill-pass-1', 'taiko-skill-pass-1', 'fruits-skill-pass-1', 'mania-skill-pass-1');
+update achievements set cond = '(score.mods & 1 == 0) and 2 <= score.sr < 3' where file in ('osu-skill-pass-2', 'taiko-skill-pass-2', 'fruits-skill-pass-2', 'mania-skill-pass-2');
+update achievements set cond = '(score.mods & 1 == 0) and 3 <= score.sr < 4' where file in ('osu-skill-pass-3', 'taiko-skill-pass-3', 'fruits-skill-pass-3', 'mania-skill-pass-3');
+update achievements set cond = '(score.mods & 1 == 0) and 4 <= score.sr < 5' where file in ('osu-skill-pass-4', 'taiko-skill-pass-4', 'fruits-skill-pass-4', 'mania-skill-pass-4');
+update achievements set cond = '(score.mods & 1 == 0) and 5 <= score.sr < 6' where file in ('osu-skill-pass-5', 'taiko-skill-pass-5', 'fruits-skill-pass-5', 'mania-skill-pass-5');
+update achievements set cond = '(score.mods & 1 == 0) and 6 <= score.sr < 7' where file in ('osu-skill-pass-6', 'taiko-skill-pass-6', 'fruits-skill-pass-6', 'mania-skill-pass-6');
+update achievements set cond = '(score.mods & 1 == 0) and 7 <= score.sr < 8' where file in ('osu-skill-pass-7', 'taiko-skill-pass-7', 'fruits-skill-pass-7', 'mania-skill-pass-7');
+update achievements set cond = '(score.mods & 1 == 0) and 8 <= score.sr < 9' where file in ('osu-skill-pass-8', 'taiko-skill-pass-8', 'fruits-skill-pass-8', 'mania-skill-pass-8');
+update achievements set cond = '(score.mods & 1 == 0) and 9 <= score.sr < 10' where file = 'osu-skill-pass-9';
+update achievements set cond = '(score.mods & 1 == 0) and 10 <= score.sr < 11' where file = 'osu-skill-pass-10';
+
+update achievements set cond = 'score.perfect and 1 <= score.sr < 2' where file in ('osu-skill-fc-1', 'taiko-skill-fc-1', 'fruits-skill-fc-1', 'mania-skill-fc-1');
+update achievements set cond = 'score.perfect and 2 <= score.sr < 3' where file in ('osu-skill-fc-2', 'taiko-skill-fc-2', 'fruits-skill-fc-2', 'mania-skill-fc-2');
+update achievements set cond = 'score.perfect and 3 <= score.sr < 4' where file in ('osu-skill-fc-3', 'taiko-skill-fc-3', 'fruits-skill-fc-3', 'mania-skill-fc-3');
+update achievements set cond = 'score.perfect and 4 <= score.sr < 5' where file in ('osu-skill-fc-4', 'taiko-skill-fc-4', 'fruits-skill-fc-4', 'mania-skill-fc-4');
+update achievements set cond = 'score.perfect and 5 <= score.sr < 6' where file in ('osu-skill-fc-5', 'taiko-skill-fc-5', 'fruits-skill-fc-5', 'mania-skill-fc-5');
+update achievements set cond = 'score.perfect and 6 <= score.sr < 7' where file in ('osu-skill-fc-6', 'taiko-skill-fc-6', 'fruits-skill-fc-6', 'mania-skill-fc-6');
+update achievements set cond = 'score.perfect and 7 <= score.sr < 8' where file in ('osu-skill-fc-7', 'taiko-skill-fc-7', 'fruits-skill-fc-7', 'mania-skill-fc-7');
+update achievements set cond = 'score.perfect and 8 <= score.sr < 9' where file in ('osu-skill-fc-8', 'taiko-skill-fc-8', 'fruits-skill-fc-8', 'mania-skill-fc-8');
+update achievements set cond = 'score.perfect and 9 <= score.sr < 10' where file = 'osu-skill-fc-9';
+update achievements set cond = 'score.perfect and 10 <= score.sr < 11' where file = 'osu-skill-fc-10';
+
+update achievements set cond = '500 <= score.max_combo < 750' where file = 'osu-combo-500';
+update achievements set cond = '750 <= score.max_combo < 1000' where file = 'osu-combo-750';
+update achievements set cond = '1000 <= score.max_combo < 2000' where file = 'osu-combo-1000';
+update achievements set cond = '2000 <= score.max_combo' where file = 'osu-combo-2000';
+
+# v3.2.6
+alter table stats change maxcombo_vn_std max_combo_vn_std int(11) unsigned default 0 not null;
+alter table stats change maxcombo_vn_taiko max_combo_vn_taiko int(11) unsigned default 0 not null;
+alter table stats change maxcombo_vn_catch max_combo_vn_catch int(11) unsigned default 0 not null;
+alter table stats change maxcombo_vn_mania max_combo_vn_mania int(11) unsigned default 0 not null;
+alter table stats change maxcombo_rx_std max_combo_rx_std int(11) unsigned default 0 not null;
+alter table stats change maxcombo_rx_taiko max_combo_rx_taiko int(11) unsigned default 0 not null;
+alter table stats change maxcombo_rx_catch max_combo_rx_catch int(11) unsigned default 0 not null;
+alter table stats change maxcombo_ap_std max_combo_ap_std int(11) unsigned default 0 not null;
+
+# v3.2.7
+drop table if exists user_hashes;
+
+# v3.3.0
+rename table friendships to relationships;
+alter table relationships add type enum('friend', 'block') not null;

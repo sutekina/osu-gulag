@@ -21,7 +21,6 @@ from constants.mods import Mods
 from objects import glob
 from objects.beatmap import Beatmap
 from utils.misc import escape_enum
-from utils.misc import point_of_interest
 from utils.misc import pymysql_encode
 
 if TYPE_CHECKING:
@@ -39,6 +38,8 @@ __all__ = (
     'Slot',
     'Match'
 )
+
+BASE_DOMAIN = glob.config.domain
 
 @unique
 @pymysql_encode(escape_enum)
@@ -130,7 +131,7 @@ class MapPool:
                  'FROM tourney_pool_maps '
                  'WHERE pool_id = %s')
 
-        async for row in glob.db.iterall(query, [self.id]):
+        for row in await glob.db.fetchall(query, [self.id]):
             map_id = row['map_id']
             bmap = await Beatmap.from_bid(map_id)
 
@@ -203,7 +204,7 @@ class Match:
     """
     __slots__ = (
         'id', 'name', 'passwd', 'host', '_refs',
-        'map_id', 'map_md5', 'map_name',
+        'map_id', 'map_md5', 'map_name', 'prev_map_id',
         'mods', 'freemods', 'mode',
         'chat', 'slots',
         #'type',
@@ -214,7 +215,9 @@ class Match:
 
         # scrimmage stuff
         'is_scrimming', 'match_points', 'bans',
-        'winners', 'winning_pts', 'use_pp_scoring'
+        'winners', 'winning_pts', 'use_pp_scoring',
+
+        'tourney_clients'
     )
 
     def __init__(self) -> None:
@@ -228,6 +231,7 @@ class Match:
         self.map_id = 0
         self.map_md5 = ''
         self.map_name = ''
+        self.prev_map_id = 0 # previously chosen map
 
         self.mods = Mods.NOMOD
         self.mode = GameMode.vn_std
@@ -253,6 +257,8 @@ class Match:
         self.winning_pts = 0
         self.use_pp_scoring = False # only for scrims
 
+        self.tourney_clients: set[int] = set() # player ids
+
     @property
     def url(self) -> str:
         """The match's invitation url."""
@@ -261,7 +267,7 @@ class Match:
     @property
     def map_url(self):
         """The osu! beatmap url for `self`'s map."""
-        return f'https://osu.ppy.sh/b/{self.map_id}'
+        return f'https://{BASE_DOMAIN}/b/{self.map_id}'
 
     @property
     def embed(self) -> str:
@@ -306,6 +312,7 @@ class Match:
                 return idx
 
     def get_host_slot(self) -> Optional[Slot]:
+        """Return the slot containing the host."""
         for s in self.slots:
             if (
                 s.status & SlotStatus.has_player and
@@ -328,9 +335,6 @@ class Match:
     def enqueue(self, data: bytes, lobby: bool = True,
                 immune: Sequence[int] = []) -> None:
         """Add data to be sent to all clients in the match."""
-        if not self.chat:
-            point_of_interest()
-
         self.chat.enqueue(data, immune)
 
         if lobby and (lchan := glob.channels['#lobby']) and lchan.players:
@@ -338,9 +342,6 @@ class Match:
 
     def enqueue_state(self, lobby: bool = True) -> None:
         """Enqueue `self`'s state to players in the match & lobby."""
-        if not self.chat:
-            point_of_interest()
-
         # TODO: hmm this is pretty bad, writes twice
 
         # send password only to users currently in the match.
@@ -375,11 +376,15 @@ class Match:
         """Reset the current scrim's winning points & bans."""
         self.match_points.clear()
         self.winners.clear()
+<<<<<<< HEAD
 
+=======
+>>>>>>> 43368beed249a88997d6d3b6f45c6b656e27d276
         self.bans.clear()
 
-    async def await_submissions(self, was_playing: list['Player']
-                               ) -> tuple[dict[str, Union[int, float]], list['Player']]:
+    async def await_submissions(
+        self, was_playing: Sequence['Player']
+    ) -> tuple[dict[str, Union[int, float]], list['Player']]:
         """Await score submissions from all players in completed state."""
         scores = defaultdict(int)
         didnt_submit: list['Player'] = []
@@ -429,7 +434,7 @@ class Match:
         # all scores retrieved, update the match.
         return scores, didnt_submit
 
-    async def update_matchpoints(self, was_playing: list['Player']) -> None:
+    async def update_matchpoints(self, was_playing: Sequence['Player']) -> None:
         """\
         Determine the winner from `scores`, increment & inform players.
 
