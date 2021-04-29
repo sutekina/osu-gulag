@@ -298,6 +298,7 @@ class Logout(BanchoPacket, type=Packets.OSU_LOGOUT):
             return
 
         p.logout()
+
         await p.update_latest_activity()
         log(f'{p} logged out.', Ansi.LYELLOW)
 
@@ -581,8 +582,7 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         p.bancho_priv | ClientPrivileges.Supporter
     )
 
-
-    data += packets.notification('Welcome back to the Sutekina!\n'
+    data += packets.notification('Welcome back to the gulag!\n'
                                 f'Current build: v{glob.version}')
 
     # send all channel info.
@@ -615,10 +615,6 @@ async def login(origin: bytes, ip: str) -> tuple[bytes, str]:
         else:
             # use ip-api
             await p.fetch_geoloc_web(ip)
-
-    data += packets.mainMenuIcon()
-    data += packets.friendsList(*p.friends)
-    data += packets.silenceEnd(p.remaining_silence)
 
     data += packets.mainMenuIcon()
     data += packets.friendsList(*p.friends)
@@ -791,7 +787,19 @@ class SendPrivateMessage(BanchoPacket, type=Packets.OSU_SEND_PRIVATE_MESSAGE):
         # allow this to get from sql - players can receive
         # messages offline, due to the mail system. B)
         if not (t := await glob.players.get_ensure(name=t_name)):
+            if glob.app.debug:
                 log(f'{p} tried to write to non-existent user {t_name}.', Ansi.LYELLOW)
+            return
+
+        if p.id in t.blocks:
+            p.enqueue(packets.userDMBlocked(t_name))
+
+            if glob.app.debug:
+                log(f'{p} tried to message {t}, but they have them blocked.')
+            return
+
+        if t.pm_private and p.id not in t.friends:
+            p.enqueue(packets.userDMBlocked(t_name))
 
             if glob.app.debug:
                 log(f'{p} tried to message {t}, but they are blocking dms.')
@@ -1061,6 +1069,7 @@ class MatchChangeSlot(BanchoPacket, type=Packets.OSU_MATCH_CHANGE_SLOT):
         s = m.get_slot(p)
         m.slots[self.slot_id].copy_from(s)
         s.reset()
+
         m.enqueue_state() # technically not needed for host?
 
 @register
@@ -1565,9 +1574,6 @@ class MatchInvite(BanchoPacket, type=Packets.OSU_MATCH_INVITE):
 
         if not (t := glob.players.get(id=self.user_id)):
             log(f'{p} tried to invite a user who is not online! ({self.user_id})')
-            return
-        elif t is glob.bot:
-            p.send("I'm too busy!", sender=glob.bot)
             return
 
         if t is glob.bot:

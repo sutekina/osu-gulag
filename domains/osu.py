@@ -16,7 +16,6 @@ from typing import Callable
 from typing import Optional
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
-from utils.recalculator import PPCalculator
 
 import bcrypt
 import orjson
@@ -360,8 +359,15 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
     params = {
         'amount': 100,
         'offset': conn.args['p']
+    }
 
-    params['mode'] = conn.args['m']
+    # eventually we could try supporting these,
+    # but it mostly depends on the mirror.
+    if conn.args['q'] not in ('Newest', 'Top+Rated', 'Most+Played'):
+        params['query'] = conn.args['q']
+
+    if conn.args['m'] != '-1':
+        params['mode'] = conn.args['m']
 
     if conn.args['r'] != '4': # 4 = all
         # convert to osu!api status
@@ -393,8 +399,8 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
             result = result['data']
 
     lresult = len(result) # send over 100 if we receive
-                        # 100 matches, so the client
-                        # knows there are more to get
+                          # 100 matches, so the client
+                          # knows there are more to get
     ret = [f"{'101' if lresult == 100 else lresult}"]
 
     for bmap in result:
@@ -412,47 +418,11 @@ async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
             key = lambda m: m['DifficultyRating']
         )
         diffs_str = ','.join([DIRECT_MAP_INFO_FMTSTR.format(**row)
-                            for row in diff_sorted_maps])
+                              for row in diff_sorted_maps])
 
         ret.append(DIRECT_SET_INFO_FMTSTR.format(**bmap, diffs=diffs_str))
 
     return '\n'.join(ret).encode()
-
-#gatari search ^_^
-# async def osuSearchHandler(p: 'Player', conn: Connection) -> Optional[bytes]:
-#     if not conn.args['p'].isdecimal():
-#         return (400, b'')
-    
-#     url = "https://osu.gatari.pw/web/osu-search.php"
-#     #url = f'{glob.config.mirror}/api/search' ww
-#     params = {
-#         "u": "ChiiKun_",
-#         "h": "68a43f66d7392f72dc074d797ea428ff",
-#         'p': conn.args['p'],
-#         'q': conn.args['q']
-
-#     }
-
-#     # eventually we could try supporting these,
-#     # but it mostly depends on the mirror.
-#     if conn.args['q'] not in ('Newest', 'Top+Rated', 'Most+Played'):
-#         params['query'] = conn.args['q']
-
-#     if conn.args['m'] != '-1':
-#         params |= {'m': conn.args['m']}
-
-#     if conn.args['r'] != '4': # 4 = all
-#         # convert to osu!api status
-#         #status = RankedStatus.from_osudirect(int(conn.args['r']))
-#         params |= {'r': conn.args['r']}
-
-#     async with glob.http.get(url, params = params) as resp:
-#         if not resp or resp.status != 200:
-#             return b'Failed to retrieve data from mirror!'
-
-#         result = await resp.read()
-
-#     return result
 
 # TODO: video support (needs db change)
 @domain.route('/web/osu-search-set.php')
@@ -842,12 +812,12 @@ async def osuSubmitModularSelector(conn: Connection) -> Optional[bytes]:
         # we'll send back an empty error, which will just tell the
         # client that the score submission process is complete.. lol
         # (also no point on rx/ap since you can't see the charts atm xd)
+
         # TODO: we actually have to send back an empty chart since the
         # client uses this to confirm the score has been submitted.. lol
         ret = b'error: no'
 
     else:
-        #
         # prepare to send the user charts & achievements.
         achievements = []
 

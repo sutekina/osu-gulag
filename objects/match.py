@@ -376,10 +376,6 @@ class Match:
         """Reset the current scrim's winning points & bans."""
         self.match_points.clear()
         self.winners.clear()
-<<<<<<< HEAD
-
-=======
->>>>>>> 43368beed249a88997d6d3b6f45c6b656e27d276
         self.bans.clear()
 
     async def await_submissions(
