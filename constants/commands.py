@@ -1131,7 +1131,7 @@ async def reload(ctx: Context) -> str:
 async def server(ctx: Context) -> str:
     """Retrieve performance data about the server."""
 
-    build_str = f'gulag v{glob.version!r} ({glob.config.domain})'
+    build_str = f'sutekina v{glob.version!r} ({glob.config.domain})'
 
     # get info about this process
     proc = psutil.Process(os.getpid())
@@ -2177,7 +2177,7 @@ async def clan_list(ctx: Context) -> str:
     if offset >= (total_clans := len(glob.clans)):
         return 'No clans found.'
 
-    msg = [f'gulag clans listing ({total_clans} total).']
+    msg = [f'sutekina clans listing ({total_clans} total).']
 
     for idx, clan in enumerate(glob.clans, offset):
         msg.append(f'{idx + 1}. {clan!r}')

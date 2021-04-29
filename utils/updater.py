@@ -40,7 +40,7 @@ class Updater:
             prev_ver = self.version
 
             printc('\n'.join([
-                'Welcome to gulag!',
+                'Welcome to sutekina!',
                 'If you have any issues with the server,',
                 'feel free to join our public Discord :)',
                 '',
