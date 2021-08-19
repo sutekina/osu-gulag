@@ -9,8 +9,9 @@ from typing import Optional
 from typing import Sequence
 from typing import Union
 
-from cmyui import log
-from cmyui import Ansi
+import aiomysql
+from cmyui.logging import Ansi
+from cmyui.logging import log
 
 from constants.privileges import Privileges
 from objects import glob
@@ -33,13 +34,13 @@ __all__ = (
 # TODO: decorator for these collections which automatically
 # adds debugging to their append/remove/insert/extend methods.
 
-class Channels(list):
+class Channels(list[Channel]):
     """The currently active chat channels on the server."""
 
-    def __iter__(self) -> Iterator['Channel']:
+    def __iter__(self) -> Iterator[Channel]:
         return super().__iter__()
 
-    def __contains__(self, o: Union['Channel', str]) -> bool:
+    def __contains__(self, o: Union[Channel, str]) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -47,7 +48,7 @@ class Channels(list):
         else:
             return super().__contains__(o)
 
-    def __getitem__(self, index: Union[int, slice, str]) -> 'Channel':
+    def __getitem__(self, index: Union[int, slice, str]) -> Channel:
         # XXX: can be either a string (to get by name),
         # or a slice, for indexing the internal array.
         if isinstance(index, str):
@@ -61,26 +62,20 @@ class Channels(list):
         # #spect_1 instead of #spectator.
         return f'[{", ".join(c._name for c in self)}]'
 
-    def __repr__(self) -> str:
-        # XXX: we use the "real" name, aka
-        # #multi_1 instead of #multiplayer
-        # #spect_1 instead of #spectator.
-        return f'[{", ".join(c._name for c in self)}]'
-
-    def get(self, name: str) -> Optional['Channel']:
+    def get(self, name: str) -> Optional[Channel]:
         """Get a channel from the list by `name`."""
         for c in self:
             if c._name == name:
                 return c
 
-    def append(self, c: 'Channel') -> None:
+    def append(self, c: Channel) -> None:
         """Append `c` to the list."""
         super().append(c)
 
         if glob.app.debug:
             log(f'{c} added to channels list.')
 
-    def remove(self, c: 'Channel') -> None:
+    def remove(self, c: Channel) -> None:
         """Remove `c` from the list."""
         super().remove(c)
 
@@ -88,31 +83,31 @@ class Channels(list):
             log(f'{c} removed from channels list.')
 
     @classmethod
-    async def prepare(cls) -> 'Channels':
+    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> 'Channels':
         """Fetch data from sql & return; preparing to run the server."""
-        log('Fetching channels from sql', Ansi.LCYAN)
-        return cls(
+        log('Fetching channels from sql.', Ansi.LCYAN)
+        await db_cursor.execute('SELECT * FROM channels')
+        return cls([
             Channel(
                 name = row['name'],
                 topic = row['topic'],
                 read_priv = Privileges(row['read_priv']),
                 write_priv = Privileges(row['write_priv']),
                 auto_join = row['auto_join'] == 1
-            ) for row in await glob.db.fetchall('SELECT * FROM channels')
-        )
+            ) async for row in db_cursor
+        ])
 
-class Matches(list):
+class Matches(list[Match]):
     """The currently active multiplayer matches on the server."""
 
     def __init__(self) -> None:
-        super().__init__()
-        self.extend([None] * 64)
+        super().__init__([None] * glob.config.max_multi_matches)
 
-    def __iter__(self) -> Iterator['Match']:
+    def __iter__(self) -> Iterator[Match]:
         return super().__iter__()
 
     def __repr__(self) -> str:
-        return f'[{", ".join(m.name for m in self if m)}]'
+        return f'[{", ".join([m.name for m in self if m])}]'
 
     def __iter__(self) -> Iterator['Match']:
         return super().__iter__()
@@ -121,15 +116,15 @@ class Matches(list):
         return f'[{", ".join(m.name for m in self if m)}]'
 
     def get_free(self) -> Optional[int]:
-        """Return the first free slot id from `self`."""
+        """Return the first free match id from `self`."""
         for idx, m in enumerate(self):
             if m is None:
                 return idx
 
-    def append(self, m: 'Match') -> bool:
+    def append(self, m: Match) -> bool:
         """Append `m` to the list."""
         if (free := self.get_free()) is not None:
-            # set the id of the match to the free slot.
+            # set the id of the match to the lowest available free.
             m.id = free
             self[free] = m
 
@@ -141,7 +136,7 @@ class Matches(list):
             log(f'Match list is full! Could not add {m}.')
             return False
 
-    def remove(self, m: 'Match') -> None:
+    def remove(self, m: Match) -> None:
         """Remove `m` from the list."""
         for i, _m in enumerate(self):
             if m is _m:
@@ -151,7 +146,7 @@ class Matches(list):
         if glob.app.debug:
             log(f'{m} removed from matches list.')
 
-class Players(list):
+class Players(list[Player]):
     """The currently active players on the server."""
     __slots__ = ('_lock',)
 
@@ -200,7 +195,7 @@ class Players(list):
                 p.enqueue(data)
 
     @staticmethod
-    def _parse_attr(kwargs: dict[str, object]) -> Optional[tuple[str, object]]:
+    def _parse_attr(kwargs: dict[str, object]) -> tuple[str, object]:
         """Get first matched attr & val from input kwargs. Used in get() methods."""
         for attr in ('token', 'id', 'name'):
             if (val := kwargs.pop(attr, None)) is not None:
@@ -276,9 +271,6 @@ class Players(list):
 
         super().append(p)
 
-        if glob.app.debug:
-            log(f'{p} added to global player list.')
-
     def remove(self, p: Player) -> None:
         """Remove `p` from the list."""
         if p not in self:
@@ -288,23 +280,20 @@ class Players(list):
 
         super().remove(p)
 
-        if glob.app.debug:
-            log(f'{p} removed from global player list.')
-
-class MapPools(list):
+class MapPools(list[MapPool]):
     """The currently active mappools on the server."""
 
-    def __iter__(self) -> Iterator['MapPool']:
+    def __iter__(self) -> Iterator[MapPool]:
         return super().__iter__()
 
-    def __getitem__(self, index: Union[int, slice, str]) -> 'MapPool':
+    def __getitem__(self, index: Union[int, slice, str]) -> MapPool:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(index)
         else:
             return super().__getitem__(index)
 
-    def __contains__(self, o: Union['MapPool', str]) -> bool:
+    def __contains__(self, o: Union[MapPool, str]) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -312,20 +301,20 @@ class MapPools(list):
         else:
             return o in self
 
-    def get(self, name: str) -> Optional['MapPool']:
+    def get(self, name: str) -> Optional[MapPool]:
         """Get a pool from the list by `name`."""
         for p in self:
             if p.name == name:
                 return p
 
-    def append(self, mp: 'MapPool') -> None:
+    def append(self, mp: MapPool) -> None:
         """Append `mp` to the list."""
         super().append(mp)
 
         if glob.app.debug:
             log(f'{mp} added to mappools list.')
 
-    def remove(self, mp: 'MapPool') -> None:
+    def remove(self, mp: MapPool) -> None:
         """Remove `mp` from the list."""
         super().remove(mp)
 
@@ -333,32 +322,38 @@ class MapPools(list):
             log(f'{mp} removed from mappools list.')
 
     @classmethod
-    async def prepare(cls) -> 'MapPools':
+    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> 'MapPools':
         """Fetch data from sql & return; preparing to run the server."""
-        log('Fetching mappools from sql', Ansi.LCYAN)
-        return cls([
+        log('Fetching mappools from sql.', Ansi.LCYAN)
+        await db_cursor.execute('SELECT * FROM tourney_pools')
+        obj = cls([
             MapPool(
                 id = row['id'],
                 name = row['name'],
                 created_at = row['created_at'],
                 created_by = await glob.players.get_ensure(id=row['created_by'])
-            ) for row in await glob.db.fetchall('SELECT * FROM tourney_pools')
+            ) async for row in db_cursor
         ])
 
-class Clans(list):
+        for pool in obj:
+            await pool.maps_from_sql(db_cursor)
+
+        return obj
+
+class Clans(list[Clan]):
     """The currently active clans on the server."""
 
-    def __iter__(self) -> Iterator['Clan']:
+    def __iter__(self) -> Iterator[Clan]:
         return super().__iter__()
 
-    def __getitem__(self, index: Union[int, slice, str]) -> 'Clan':
+    def __getitem__(self, index: Union[int, slice, str]) -> Clan:
         """Allow slicing by either a string (for name), or slice."""
         if isinstance(index, str):
             return self.get(name=index)
         else:
             return super().__getitem__(index)
 
-    def __contains__(self, o: Union['Clan', str]) -> bool:
+    def __contains__(self, o: Union[Clan, str]) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
         if isinstance(o, str):
@@ -366,7 +361,7 @@ class Clans(list):
         else:
             return o in self
 
-    def get(self, **kwargs) -> Optional['Clan']:
+    def get(self, **kwargs) -> Optional[Clan]:
         """Get a clan by name, tag, or id."""
         for attr in ('name', 'tag', 'id'):
             if val := kwargs.pop(attr, None):
@@ -378,14 +373,14 @@ class Clans(list):
             if getattr(c, attr) == val:
                 return c
 
-    def append(self, c: 'Clan') -> None:
+    def append(self, c: Clan) -> None:
         """Append `c` to the list."""
         super().append(c)
 
         if glob.app.debug:
             log(f'{c} added to clans list.')
 
-    def remove(self, c: 'Clan') -> None:
+    def remove(self, c: Clan) -> None:
         """Remove `m` from the list."""
         super().remove(c)
 
@@ -393,13 +388,13 @@ class Clans(list):
             log(f'{c} removed from clans list.')
 
     @classmethod
-    async def prepare(cls) -> 'Clans':
+    async def prepare(cls, db_cursor: aiomysql.DictCursor) -> 'Clans':
         """Fetch data from sql & return; preparing to run the server."""
-        log('Fetching clans from sql', Ansi.LCYAN)
-        res = await glob.db.fetchall('SELECT * FROM clans')
-        obj = cls([Clan(**row) for row in res])
+        log('Fetching clans from sql.', Ansi.LCYAN)
+        await db_cursor.execute('SELECT * FROM clans')
+        obj = cls([Clan(**row) async for row in db_cursor])
 
         for clan in obj:
-            await clan.members_from_sql()
+            await clan.members_from_sql(db_cursor)
 
         return obj

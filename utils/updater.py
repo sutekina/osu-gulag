@@ -5,20 +5,17 @@
 # and when it detects a change, it will apply any nescessary
 # changes to your sql database & keep cmyui_pkg up to date.
 
-import asyncio
 import re
-import os
-import signal
-from datetime import datetime as dt
-from importlib.metadata import version as pkg_version
+import importlib.metadata
 from pathlib import Path
 from typing import Optional
 
 import aiomysql
-from cmyui import Ansi
-from cmyui import log
-from cmyui import printc
-from cmyui import Version
+
+from cmyui.logging import Ansi
+from cmyui.logging import log
+from cmyui.logging import printc
+from cmyui.version import Version
 from pip._internal.cli.main import main as pip_main
 
 from objects import glob
@@ -26,6 +23,8 @@ from objects import glob
 __all__ = ('Updater',)
 
 SQL_UPDATES_FILE = Path.cwd() / 'ext/updates.sql'
+
+VERSION_RGX = re.compile(r'^# v(?P<ver>\d+\.\d+\.\d+)$')
 
 class Updater:
     def __init__(self, version: Version) -> None:
@@ -47,9 +46,9 @@ class Updater:
                 'https://discord.gg/ShEQgUx',
                 'Enjoy the server!'
             ]), Ansi.LCYAN)
-            input('> Press enter to continue')
 
-        await self._update_cmyui() # pip install -U cmyui
+        if glob.has_internet:
+            await self._update_cmyui() # pip install -U cmyui
         await self._update_sql(prev_ver) # run updates.sql
 
     @staticmethod
@@ -81,7 +80,6 @@ class Updater:
             if not resp or resp.status != 200:
                 return self.version
 
-            # safe cuz py>=3.7 dicts are ordered
             if not (json := await resp.json()):
                 return self.version
 
@@ -90,7 +88,7 @@ class Updater:
 
     async def _update_cmyui(self) -> None:
         """Check if cmyui_pkg has a newer release; update if available."""
-        module_ver = Version.from_str(pkg_version('cmyui'))
+        module_ver = Version.from_str(importlib.metadata.version('cmyui'))
         latest_ver = await self._get_latest_cmyui()
 
         if module_ver < latest_ver:
@@ -120,8 +118,8 @@ class Updater:
 
             if line.startswith('#'):
                 # may be normal comment or new version
-                if rgx := re.fullmatch(r'^# v(?P<ver>\d+\.\d+\.\d+)$', line):
-                    current_ver = Version.from_str(rgx['ver'])
+                if r_match := VERSION_RGX.fullmatch(line):
+                    current_ver = Version.from_str(r_match['ver'])
 
                 continue
             elif not current_ver:
@@ -146,26 +144,33 @@ class Updater:
         log(f'Updating sql (v{prev_version!r} -> '
                           f'v{self.version!r}).', Ansi.LMAGENTA)
 
-        sql_lock = asyncio.Lock()
+        updated = False
 
-        # TODO: sql transaction? for rollback
-        async with sql_lock:
-            for query in queries:
-                try:
-                    await glob.db.execute(query)
-                except aiomysql.MySQLError:
-                    # if anything goes wrong while writing a query,
-                    # most likely something is very wrong.
-                    log(f'Failed: {query}', Ansi.GRAY)
-                    log(
-                        "SQL failed to update - unless you've been modifying "
-                        "sql and know what caused this, please please contact "
-                        "cmyui#0425.", Ansi.LRED
-                    )
+        # NOTE: this using a transaction is pretty pointless with mysql since
+        # any structural changes to tables will implciticly commit the changes.
+        # https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
+        async with glob.db.pool.acquire() as conn:
+            async with conn.cursor() as db_cursor:
+                await conn.begin()
+                for query in queries:
+                    try:
+                        await db_cursor.execute(query)
+                    except aiomysql.MySQLError:
+                        await conn.rollback()
+                        break
+                else:
+                    # all queries ran
+                    # without problems.
+                    await conn.commit()
+                    updated = True
 
-                    input('Press enter to exit')
+        if not updated:
+            log(f'Failed: {query}', Ansi.GRAY)
+            log("SQL failed to update - unless you've been "
+                "modifying sql and know what caused this, "
+                "please please contact cmyui#0425.", Ansi.LRED)
 
-                    await glob.app.after_serving()
-                    raise KeyboardInterrupt
+            await glob.app.after_serving()
+            raise KeyboardInterrupt
 
     # TODO _update_config?
