@@ -65,7 +65,7 @@ utils.misc.install_excepthook()
 # current version of gulag
 # NOTE: this is used internally for the updater, it may be
 # worth reading through it's code before playing with it.
-glob.version = cmyui.Version(3, 5, 3)
+glob.version = cmyui.Version(3, 5, 4)
 
 OPPAI_PATH = Path.cwd() / 'oppai-ng'
 GEOLOC_DB_FILE = Path.cwd() / 'ext/GeoLite2-City.mmdb'
@@ -115,7 +115,7 @@ async def setup_collections(db_cursor: aiomysql.DictCursor) -> None:
 
 async def before_serving() -> None:
     """Called before the server begins serving connections."""
-    glob.loop = asyncio.get_event_loop()
+    glob.loop = asyncio.get_running_loop()
 
     if glob.has_internet:
         # retrieve a client session to use for http connections.
@@ -219,7 +219,7 @@ def ensure_local_services_are_running() -> None:
         # sql server running locally, make sure it's running
         for service in ('mysqld', 'mariadb'):
             if os.path.exists(f'/var/run/{service}/{service}.pid'):
-                return True
+                return
         else:
             # not found, try pgrep
             pgrep_exit_code = os.system('pgrep mysqld')
@@ -317,7 +317,7 @@ def create_server() -> cmyui.Server:
 
     return server
 
-if __name__ == '__main__':
+def main() -> int:
     # check if the environment is prepared to run the server.
     ensure_supported_platform() # linux only at the moment
     ensure_local_services_are_running() # mysql (if local), nginx
@@ -336,7 +336,10 @@ if __name__ == '__main__':
 
     # start up the event loop and bind a socket to the configured address.
     glob.app.run(addr=glob.config.server_addr, handle_restart=True)
+    return 0
 
+if __name__ == '__main__':
+    raise SystemExit(main())
 elif __name__ == 'main':
     # check specifically for asgi servers since many related projects
     # (such as gulag-web) use them, so people may assume we do as well.

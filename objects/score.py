@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import functools
 import math
-
 from base64 import b64decode
 from datetime import datetime
 from enum import IntEnum
@@ -54,25 +54,24 @@ class Grade(IntEnum):
     XH = 9 # HD SS
 
     @classmethod
+    @functools.cache
     def from_str(cls, s: str) -> 'Grade':
-        return gradestr_to_grade_dict[s.lower()]
+        return {
+            'xh': Grade.XH,
+            'x': Grade.X,
+            'sh': Grade.SH,
+            's': Grade.S,
+            'a': Grade.A,
+            'b': Grade.B,
+            'c': Grade.C,
+            'd': Grade.D,
+            'f': Grade.F,
+            'n': Grade.N
+        }[s.lower()]
 
     def __format__(self, format_spec: str) -> str:
         if format_spec == 'stats_column':
             return f'{self.name.lower()}_count'
-
-gradestr_to_grade_dict = {
-    'xh': Grade.XH,
-    'x': Grade.X,
-    'sh': Grade.SH,
-    's': Grade.S,
-    'a': Grade.A,
-    'b': Grade.B,
-    'c': Grade.C,
-    'd': Grade.D,
-    'f': Grade.F,
-    'n': Grade.N
-}
 
 @unique
 @pymysql_encode(escape_enum)
@@ -179,7 +178,7 @@ class Score:
     """Classmethods to fetch a score object from various data types."""
 
     @classmethod
-    async def from_sql(cls, scoreid: int, scores_table: str) -> Optional['Score']:
+    async def from_sql(cls, score_id: int, scores_table: str) -> Optional['Score']:
         """Create a score object from sql using it's scoreid."""
         # XXX: perhaps in the future this should take a gamemode rather
         # than just the sql table? just faster on the current setup :P
@@ -190,7 +189,7 @@ class Score:
             'status, mode, play_time, '
             'time_elapsed, client_flags, online_checksum '
             f'FROM {scores_table} WHERE id = %s',
-            [scoreid], _dict=False
+            [score_id], _dict=False
         )
 
         if not res:
@@ -350,7 +349,7 @@ class Score:
                 ezpp.set_accuracy_percent(self.acc)
 
                 ezpp.calculate(osu_file_path)
-                
+
                 pp = ezpp.get_pp()
                 if pp not in (math.inf, math.nan):
                     return (pp, ezpp.get_sr())
@@ -428,9 +427,9 @@ class Score:
 
             self.acc = 100.0 * ((self.n100 * 0.5) + self.n300) / total
 
-        elif mode_vn == 2:
-            # osu!catch
-            total = self.n300 + self.n100 + self.n50 + self.nkatu + self.nmiss
+        elif mode_vn == 2: # osu!catch
+            total = (self.n300 + self.n100 + self.n50 +
+                     self.nkatu + self.nmiss)
 
             if total == 0:
                 self.acc = 0.0
@@ -438,8 +437,7 @@ class Score:
 
             self.acc = 100.0 * (self.n300 + self.n100 + self.n50) / total
 
-        elif mode_vn == 3:
-            # osu!mania
+        elif mode_vn == 3: # osu!mania
             total = (self.n300 + self.n100 + self.n50 +
                      self.ngeki + self.nkatu + self.nmiss)
 
