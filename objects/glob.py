@@ -1,11 +1,12 @@
-# -*- coding: utf-8 -*-
+from typing import TYPE_CHECKING
 
-import config # export
+# this is used externally, i.e. `glob.config.attr`
+import config # type: ignore
 
 # this file contains no actualy definitions
-if __import__('typing').TYPE_CHECKING:
-    from asyncio import AbstractEventLoop
-    #from asyncio import Queue
+if TYPE_CHECKING:
+    import asyncio
+    from datetime import datetime
     from typing import Optional
 
     from aiohttp.client import ClientSession
@@ -32,9 +33,9 @@ __all__ = (
     'pools', 'clans', 'achievements',
     'version', 'bot', 'api_keys',
     'bancho_packets', 'db',
-    'has_internet', 'http',
-    'datadog', 'cache', 'loop',
-    #'sketchy_queue'
+    'has_internet', 'shutting_down', 'boot_time',
+    'http_session', 'datadog', 'cache', 'loop',
+    'housekeeping_tasks', 'ongoing_conns',
 )
 
 # server object
@@ -63,7 +64,9 @@ bancho_packets: dict['ClientPackets', 'BasePacket']
 db: 'AsyncSQLPool'
 
 has_internet: bool
-http: 'Optional[ClientSession]'
+shutting_down: bool
+boot_time: 'datetime'
+http_session: 'Optional[ClientSession]'
 
 datadog: 'Optional[ThreadStats]'
 
@@ -95,9 +98,7 @@ cache = {
     'needs_update': set() # {md5, ...}
 }
 
-loop: 'AbstractEventLoop'
+loop: 'asyncio.AbstractEventLoop'
 
-''' (currently unused)
-# queue of submitted scores deemed 'sketchy'; to be analyzed.
-sketchy_queue: 'Queue[Score]'
-'''
+housekeeping_tasks: list['asyncio.Task']
+ongoing_conns: list['asyncio.Task']
